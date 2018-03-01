@@ -2,3 +2,5 @@ node_modules
 .DS_Store
 out.csv
 .vscode
+token.json
+bundle.js

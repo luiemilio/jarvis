@@ -97,6 +97,8 @@ async function writeToCsv(startDate, endDate) {
     writer.end();
 }
 
+writeToCsv('2018-02-28', '2018-02-28');
+
 module.exports = {
     writeToCsv: writeToCsv
 };
