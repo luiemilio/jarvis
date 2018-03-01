@@ -1,14 +1,11 @@
-const zendesk = require('node-zendesk');
+const getTicketsInRange = require('./api').getTicketsInRange;
+const getMetrics = require('./api').getMetrics;
+const getUserFromId= require('./api').getUserFromId;
+const getOrganizationFromId = require('./api').getOrganizationFromId;
+const getGroupFromId = require('./api').getGroupFromId;
 const fs = require('fs');
 const csvWriter = require('csv-write-stream');
 const writer = csvWriter();
-
-const client = zendesk.createClient({
-    username: 'luis@openfin.co',
-    token: 'yjnh6Eo7ja2K0y3fuS2bIQzU229QNMtZVTmDoqOM',
-    remoteUri: 'https://openfin.zendesk.com/api/v2',
-    disableGlobalState: true
-});
 
 // original ticket columns: 
 // id, created_at, updated_at, type, priority, status, 
@@ -19,7 +16,7 @@ const client = zendesk.createClient({
 // requester_updated_at, status_updated_at, initially_updated_at, assigned_at, 
 // solved_at, first_resolution_in_minutes, reply_time_in_minutes
 
-const columns = [
+const ticketColumns = [
     'id', 'type', 'priority', 'status', 'from', 'requester_id',
     'submitter_id', 'group_id', 'organization_id', 'tags', 'created_at',
     'updated_at', 'group_stations', 'assignee_stations', 'replies',
@@ -28,71 +25,66 @@ const columns = [
     'first_resolution_time_in_minutes', 'reply_time_in_minutes'
 ];
 
-function getAllTickets() {
-    return new Promise((resolve, reject) => {
-        client.tickets.list((err, req, result) => {
-            resolve(result);
-            reject(err);
-        });
-    });
-}
-
-function getMetrics(ticketId) {
-    return new Promise((resolve, reject) => {
-        client.ticketmetrics.list(ticketId, (err, req, result) => {
-            resolve(result);
-            reject(err);
-        });
-    });
-}
-
-function getTicketsInRange(tickets, startDate, endDate) {
-    let ticketsInRange = [];
-    tickets.forEach((ticket) => {
-        ticketDate = new Date(ticket.created_at);
-        if (ticketDate >= startDate && ticketDate <= endDate) {
-            let filteredTicket = filterTicket(ticket);
-            
-            ticketsInRange.push(filterTicket(ticket));
+async function filterTicket(ticket) {
+    let filteredTicket = ticket;
+    const columns = Object.keys(ticket);
+    const columnsToFormat = ['requester_id', 'submitter_id', 'organization_id', 'group_id'];
+    for (let index = 0; index < columns.length; index++) {
+        const column = columns[index];
+        if (columnsToFormat.includes(column) && filteredTicket[column] != null) {
+            filteredTicket[column] = await idToName(filteredTicket[column], column);
         }
-    });
-    return ticketsInRange;
-}
-
-function filterTicket(ticket) {
-    let filteredTicket = {};
-    Object.keys(ticket).forEach((column) => {
-        if (columns.includes(column)) {
-            filteredTicket[column] = ticket[column];
-        }
-    });
+        if (!ticketColumns.includes(column)) delete filteredTicket[column];
+    }
     return filteredTicket;
 }
 
-function addMetricsToSingleTicket(ticket) {
-    let ticketWithMetrics = ticket;
-    getMetrics(ticket.id).then((metrics) => {
-        Object.keys(metrics).forEach((column) => {
-            if (columns.includes(column)) {
-                ticketWithMetric[column] = metrics[column];
-            }
-        });
-    });
-    return ticketWithMetrics;
+async function idToName(id, column) {
+    let result;
+    switch (column) {
+        case 'requester_id':
+            result = await getUserFromId(id);
+            break;
+        case 'submitter_id':
+            result = await getUserFromId(id);
+            break;
+        case 'organization_id':
+            result = await getOrganizationFromId(id);
+            break;
+        case 'group_id':
+            result = await getGroupFromId(id);
+            break;
+    }
+    return result;
 }
 
-function writeToCsv(tickets) {
-    writer.pipe(fs.createWriteStream('out.csv'));
+async function addMetrics(ticket) {
+    const metrics = await getMetrics(ticket.id);
+    let ticketWithMetric = ticket;
+    const columns = Object.keys(metrics);
+    columns.forEach((column) => {
+        if (ticketColumns.includes(column) && column != 'id') {
+            ticketWithMetric[column] = metrics[column];
+        }
+    });
+    return ticketWithMetric;
+}
+
+async function getTickets(startDate, endDate) {
+    const tickets = await getTicketsInRange(startDate, endDate);
+    let allTickets = [];
+    for (let index = 0; index < tickets.length; index++) {
+        const filteredTicket = await filterTicket(tickets[index]);
+        const ticketWithMetrics = await addMetrics(filteredTicket);
+        allTickets.push(ticketWithMetrics);
+    }
+    return allTickets;
+}
+
+getTickets('2018-02-28', '2018-02-28').then((tickets) => {
+    writer.pipe(fs.createWriteStream('out.csv'))
     tickets.forEach((ticket) => {
         writer.write(ticket);
     });
     writer.end();
-}
-getAllTickets().then((tickets) => {
-    const ticketsInRange = getTicketsInRange(tickets, sDate, eDate);
-    console.log(ticketsInRange[0]);
-    writeToCsv(ticketsInRange);
 });
-
-const sDate = new Date('2018/2/20');
-const eDate = new Date('2018/2/23');
