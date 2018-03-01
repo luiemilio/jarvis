@@ -2,7 +2,7 @@
   "name": "jarvis",
   "version": "1.0.0",
   "description": "",
-  "main": "test.js",
+  "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -11,7 +11,6 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^0.18.0",
-    "csv-write-stream": "^2.0.0",
-    "node-zendesk": "^1.2.1"
+    "csv-write-stream": "^2.0.0"
   }
 }

@@ -1,8 +1,11 @@
-const getTicketsInRange = require('./api').getTicketsInRange;
-const getMetrics = require('./api').getMetrics;
-const getUserFromId= require('./api').getUserFromId;
-const getOrganizationFromId = require('./api').getOrganizationFromId;
-const getGroupFromId = require('./api').getGroupFromId;
+const {
+    getTicketsInRange,
+    getMetrics,
+    getUserFromId,
+    getOrganizationFromId,
+    getGroupFromId
+} = require('./api');
+
 const fs = require('fs');
 const csvWriter = require('csv-write-stream');
 const writer = csvWriter();
@@ -14,7 +17,7 @@ const writer = csvWriter();
 // ticket metric columns:
 // group_stations, assignee_stations, replies, assignee_updated_at, 
 // requester_updated_at, status_updated_at, initially_updated_at, assigned_at, 
-// solved_at, first_resolution_in_minutes, reply_time_in_minutes
+// solved_at, first_resolution_time_in_minutes, reply_time_in_minutes
 
 const ticketColumns = [
     'id', 'type', 'priority', 'status', 'from', 'requester_id',
@@ -64,7 +67,11 @@ async function addMetrics(ticket) {
     const columns = Object.keys(metrics);
     columns.forEach((column) => {
         if (ticketColumns.includes(column) && column != 'id') {
-            ticketWithMetric[column] = metrics[column];
+            if (column === 'reply_time_in_minutes' || column === 'first_resolution_time_in_minutes') {
+                ticketWithMetric[column] = metrics[column].calendar;
+            } else {
+                ticketWithMetric[column] = metrics[column];
+            }
         }
     });
     return ticketWithMetric;
@@ -81,10 +88,15 @@ async function getTickets(startDate, endDate) {
     return allTickets;
 }
 
-getTickets('2018-02-28', '2018-02-28').then((tickets) => {
-    writer.pipe(fs.createWriteStream('out.csv'))
+async function writeToCsv(startDate, endDate) {
+    const tickets = await getTickets(startDate, endDate);
+    writer.pipe(fs.createWriteStream('out.csv'));
     tickets.forEach((ticket) => {
         writer.write(ticket);
     });
     writer.end();
-});
+}
+
+module.exports = {
+    writeToCsv: writeToCsv
+};
